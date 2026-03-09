@@ -1,19 +1,14 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
-import cloudinary
-import cloudinary.api
 import json
 
 from config import Config
 from models import db, User, Citizen, CriminalRecord, Vehicle, Wanted, Call, ActionLog, Notification
-from utils import (
-    generate_nickname, save_photo, log_action, create_notification,
-    notify_all_users, format_priority, format_status
-)
+from utils import generate_nickname, save_photo, log_action, create_notification, notify_all_users
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -24,14 +19,7 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 login_manager.login_message = 'Пожалуйста, войдите в систему'
 
-if Config.CLOUDINARY_CLOUD_NAME:
-    cloudinary.config(
-        cloud_name=Config.CLOUDINARY_CLOUD_NAME,
-        api_key=Config.CLOUDINARY_API_KEY,
-        api_secret=Config.CLOUDINARY_API_SECRET
-    )
-
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
 
@@ -39,9 +27,11 @@ os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# Создание базы данных и тестовых данных
 with app.app_context():
     db.create_all()
     
+    # Создаем тестовых пользователей если их нет
     if not User.query.first():
         users = [
             User(
@@ -72,38 +62,44 @@ with app.app_context():
         db.session.add_all(users)
         db.session.commit()
     
+    # Создаем тестовых граждан
     if not Citizen.query.first():
-        citizens = [
-            Citizen(
+        citizens = []
+        for i in range(1, 6):
+            citizen = Citizen(
                 nickname=f"citizen_{i}",
-                last_name=f"Фамилия{i}",
-                first_name=f"Имя{i}",
-                middle_name=f"Отчество{i}",
+                last_name=f"Иванов{i}",
+                first_name=f"Петр{i}",
+                middle_name=f"Сидорович{i}",
                 birth_date=f"198{i}-01-01",
                 passport_series=f"40{i}1",
                 passport_number=f"12345{i}",
                 address=f"ул. Ленина, д. {i}",
                 phone=f"+7(999){i:03d}-{i:02d}-{i:02d}",
                 status='active'
-            ) for i in range(1, 11)
-        ]
+            )
+            citizens.append(citizen)
         db.session.add_all(citizens)
         db.session.commit()
     
+    # Создаем тестовые вызовы
     if not Call.query.first():
-        calls = [
-            Call(
+        calls = []
+        for i in range(1, 4):
+            priorities = ['high', 'medium', 'low']
+            categories = ['crime', 'administrative', 'accident']
+            call = Call(
                 nickname=f"call_{i}",
                 kusp_number=f"КУСП-2025-{i:04d}",
                 address=f"ул. Тестовая, д. {i}",
                 caller_name=f"Заявитель {i}",
                 caller_phone=f"+7(999){i:03d}-{i:02d}-{i:02d}",
                 description=f"Тестовое описание вызова {i}",
-                priority=['high', 'medium', 'low'][i % 3],
-                category=['crime', 'administrative', 'accident'][i % 3],
+                priority=priorities[i-1],
+                category=categories[i-1],
                 status='active'
-            ) for i in range(1, 6)
-        ]
+            )
+            calls.append(call)
         db.session.add_all(calls)
         db.session.commit()
 
@@ -265,9 +261,7 @@ def citizens():
             request=request
         )
     
-    return render_template('citizens.html', 
-                         citizens=citizens, 
-                         search_query=search_query)
+    return render_template('citizens.html', citizens=citizens, search_query=search_query)
 
 @app.route('/citizen/<int:id>')
 @login_required
@@ -396,10 +390,7 @@ def calls():
     
     calls = query.order_by(Call.received_time.desc()).paginate(page=page, per_page=per_page)
     
-    return render_template('calls.html', 
-                         calls=calls, 
-                         current_status=status,
-                         my_only=my_only)
+    return render_template('calls.html', calls=calls, current_status=status, my_only=my_only)
 
 @app.route('/call/<int:id>')
 @login_required
@@ -647,7 +638,7 @@ def capture_wanted(id):
         data={'wanted_id': wanted.id}
     )
     
-    flash(f'Задержание зарегистрировано', 'success')
+    flash('Задержание зарегистрировано', 'success')
     return redirect(url_for('wanted'))
 
 @app.route('/history')
@@ -713,15 +704,6 @@ def api_search():
         
         results['citizens'] = [c.to_dict() for c in citizens]
     
-    if search_type in ['all', 'vehicles']:
-        vehicles = Vehicle.query.filter(
-            (Vehicle.nickname.contains(query)) |
-            (Vehicle.plate_number.contains(query)) |
-            (Vehicle.vin.contains(query))
-        ).limit(10).all()
-        
-        results['vehicles'] = [v.to_dict() for v in vehicles]
-    
     if search_type in ['all', 'calls']:
         calls = Call.query.filter(
             (Call.nickname.contains(query)) |
@@ -730,14 +712,6 @@ def api_search():
         ).limit(10).all()
         
         results['calls'] = [c.to_dict() for c in calls]
-    
-    if search_type in ['all', 'wanted']:
-        wanted = Wanted.query.filter(
-            (Wanted.nickname.contains(query)) |
-            (Wanted.crime_article.contains(query))
-        ).limit(10).all()
-        
-        results['wanted'] = [w.to_dict() for w in wanted]
     
     log_action(
         user_id=current_user.id,
@@ -751,50 +725,6 @@ def api_search():
     
     return jsonify(results)
 
-@app.route('/api/check-person', methods=['POST'])
-@login_required
-def check_person():
-    data = request.json
-    passport = data.get('passport')
-    last_name = data.get('last_name')
-    nickname = data.get('nickname')
-    
-    query = Citizen.query
-    if nickname:
-        query = query.filter_by(nickname=nickname)
-    elif passport:
-        if len(passport) >= 10:
-            passport_series = passport[:4]
-            passport_number = passport[4:]
-            query = query.filter_by(passport_series=passport_series, passport_number=passport_number)
-    elif last_name:
-        query = query.filter(Citizen.last_name.contains(last_name))
-    else:
-        return jsonify({'error': 'No search criteria'}), 400
-    
-    citizen = query.first()
-    
-    if citizen:
-        result = citizen.to_dict()
-        result['found'] = True
-        result['wanted'] = citizen.wanted.to_dict() if citizen.wanted else None
-        result['criminal_record'] = len(citizen.criminal_records) > 0
-        result['vehicles'] = [v.to_dict() for v in citizen.vehicles]
-    else:
-        result = {'found': False}
-    
-    log_action(
-        user_id=current_user.id,
-        action_type='check',
-        target_type='citizen',
-        target_id=citizen.id if citizen else 0,
-        target_nickname=citizen.nickname if citizen else None,
-        details={'passport': passport, 'found': bool(citizen)},
-        request=request
-    )
-    
-    return jsonify(result)
-
 @socketio.on('connect')
 def handle_connect():
     if current_user.is_authenticated:
@@ -807,44 +737,9 @@ def handle_disconnect():
         leave_room(f"user_{current_user.id}")
         emit('status', {'msg': f'{current_user.nickname} отключился'}, broadcast=True)
 
-@socketio.on('join_call_room')
-def handle_join_call_room(data):
-    call_id = data.get('call_id')
-    room = f"call_{call_id}"
-    join_room(room)
-    emit('joined', {'room': room, 'user': current_user.nickname}, room=room)
-
-@socketio.on('leave_call_room')
-def handle_leave_call_room(data):
-    call_id = data.get('call_id')
-    room = f"call_{call_id}"
-    leave_room(room)
-
-@socketio.on('call_message')
-def handle_call_message(data):
-    call_id = data.get('call_id')
-    message = data.get('message')
-    room = f"call_{call_id}"
-    
-    emit('call_message', {
-        'user': current_user.nickname,
-        'user_name': current_user.full_name,
-        'message': message,
-        'time': datetime.now().strftime('%H:%M:%S')
-    }, room=room)
-
 @app.route('/static/<path:filename>')
 def static_files(filename):
     return send_from_directory('static', filename)
-
-@app.errorhandler(404)
-def not_found_error(error):
-    return render_template('404.html'), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    db.session.rollback()
-    return render_template('500.html'), 500
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
