@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ОР ППСП - Провинциальный район</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="navbar">
+        <div class="logo">
+            МВД России
+            <span>ОР ППСП Провинциальный район</span>
+        </div>
+        {% if current_user.is_authenticated %}
+        <div class="user-info">
+            <div class="notification-bell" onclick="toggleNotifications()">
+                🔔
+                <span class="notification-badge" id="notificationCount" style="display: none;">0</span>
+            </div>
+            <span class="user-nickname"><code>{{ current_user.nickname }}</code></span>
+            <span class="user-name">{{ current_user.rank }} {{ current_user.full_name }}</span>
+            <span class="badge">ТН: {{ current_user.badge_number }}</span>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger">Выход</a>
+        </div>
+        {% endif %}
+    </div>
+    
+    {% if current_user.is_authenticated %}
+    <div class="menu">
+        <a href="{{ url_for('index') }}">🏠 Главная</a>
+        <a href="{{ url_for('citizens') }}">👥 Граждане</a>
+        <a href="{{ url_for('wanted') }}">🚔 Розыск</a>
+        <a href="{{ url_for('calls') }}">📞 Вызовы</a>
+        <a href="{{ url_for('new_call') }}">➕ Новый вызов</a>
+        <a href="{{ url_for('history') }}">📋 История</a>
+    </div>
+    {% endif %}
+    
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div id="notificationsPanel" class="notifications-panel" style="display: none;">
+            <div class="notifications-header">
+                <h3>Уведомления</h3>
+                <button onclick="markAllRead()" class="btn btn-small">Все прочитано</button>
+            </div>
+            <div id="notificationsList" class="notifications-list"></div>
+        </div>
+        
+        {% block content %}{% endblock %}
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+    var socket = io();
+    var currentUser = {
+        id: {{ current_user.id if current_user.is_authenticated else 'null' }},
+        nickname: '{{ current_user.nickname if current_user.is_authenticated else '' }}',
+        name: '{{ current_user.full_name if current_user.is_authenticated else '' }}'
+    };
+    
+    socket.on('connect', function() {
+        console.log('Connected to server');
+    });
+    
+    socket.on('new_call', function(data) {
+        showNotification('Новый вызов', 'Поступил вызов: ' + data.address);
+        updateNotificationCount();
+    });
+    
+    socket.on('call_taken', function(data) {
+        showNotification('Вызов принят', data.user + ' принял вызов');
+    });
+    
+    socket.on('user_status', function(data) {
+        console.log('User ' + data.user + ' is ' + data.status);
+    });
+    
+    function showNotification(title, message) {
+        var audio = new Audio('/static/sounds/notification.mp3');
+        audio.play().catch(e => console.log('Audio play failed'));
+        
+        if (Notification.permission === 'granted') {
+            new Notification(title, { body: message });
+        }
+        
+        var alert = document.createElement('div');
+        alert.className = 'alert alert-success';
+        alert.style.position = 'fixed';
+        alert.style.top = '20px';
+        alert.style.right = '20px';
+        alert.style.zIndex = '9999';
+        alert.innerHTML = `<strong>${title}</strong><br>${message}`;
+        document.body.appendChild(alert);
+        
+        setTimeout(() => alert.remove(), 5000);
+    }
+    
+    function updateNotificationCount() {
+        fetch('/api/notifications/unread-count')
+            .then(response => response.json())
+            .then(data => {
+                var badge = document.getElementById('notificationCount');
+                if (data.count > 0) {
+                    badge.textContent = data.count;
+                    badge.style.display = 'inline';
+                } else {
+                    badge.style.display = 'none';
+                }
+            });
+    }
+    
+    function toggleNotifications() {
+        var panel = document.getElementById('notificationsPanel');
+        if (panel.style.display === 'none') {
+            panel.style.display = 'block';
+            loadNotifications();
+        } else {
+            panel.style.display = 'none';
+        }
+    }
+    
+    function loadNotifications() {
+        fetch('/api/notifications?per_page=10')
+            .then(response => response.json())
+            .then(data => {
+                var list = document.getElementById('notificationsList');
+                var html = '';
+                data.notifications.forEach(n => {
+                    html += `
+                        <div class="notification-item ${n.is_read ? '' : 'unread'}" onclick="markRead(${n.id})">
+                            <strong>${n.title}</strong>
+                            <div>${n.message}</div>
+                            <small>${n.time} - ${n.date}</small>
+                        </div>
+                    `;
+                });
+                list.innerHTML = html || '<p style="padding: 20px; text-align: center;">Нет уведомлений</p>';
+            });
+    }
+    
+    function markRead(id) {
+        fetch('/api/notifications/read/' + id, { method: 'POST' })
+            .then(() => {
+                loadNotifications();
+                updateNotificationCount();
+            });
+    }
+    
+    function markAllRead() {
+        fetch('/api/notifications/read-all', { method: 'POST' })
+            .then(() => {
+                loadNotifications();
+                updateNotificationCount();
+            });
+    }
+    
+    if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission();
+    }
+    
+    setInterval(updateNotificationCount, 30000);
+    </script>
+</body>
+</html>

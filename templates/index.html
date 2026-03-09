@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="stats-grid">
+    <div class="stat-card" style="background: linear-gradient(135deg, #1e3a5f 0%, #2b4b7a 100%);">
+        <div>
+            <h3>Граждан в базе</h3>
+            <div class="number">{{ total_citizens }}</div>
+        </div>
+        <div class="icon">👥</div>
+    </div>
+    
+    <div class="stat-card" style="background: linear-gradient(135deg, #c01f2e 0%, #a01a26 100%);">
+        <div>
+            <h3>В розыске</h3>
+            <div class="number">{{ active_wanted }}</div>
+        </div>
+        <div class="icon">🚔</div>
+    </div>
+    
+    <div class="stat-card" style="background: linear-gradient(135deg, #e68a00 0%, #b36b00 100%);">
+        <div>
+            <h3>Активные вызовы</h3>
+            <div class="number">{{ active_calls }}</div>
+        </div>
+        <div class="icon">📞</div>
+    </div>
+    
+    <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #1e7a34 100%);">
+        <div>
+            <h3>Мои вызовы</h3>
+            <div class="number">{{ my_calls }}</div>
+        </div>
+        <div class="icon">👤</div>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+    <div class="card">
+        <h2>Последние вызовы</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Никнейм</th>
+                    <th>КУСП</th>
+                    <th>Время</th>
+                    <th>Адрес</th>
+                    <th>Приоритет</th>
+                    <th>Статус</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for call in recent_calls %}
+                <tr>
+                    <td><code>{{ call.nickname }}</code></td>
+                    <td><strong>{{ call.kusp_number }}</strong></td>
+                    <td>{{ call.received_time }}</td>
+                    <td>{{ call.address[:30] }}{% if call.address|length > 30 %}...{% endif %}</td>
+                    <td>
+                        <span class="priority-{{ call.priority }}">
+                            {% if call.priority == 'high' %}🔴 Высокий
+                            {% elif call.priority == 'medium' %}🟠 Средний
+                            {% else %}🟢 Низкий{% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="status-{{ call.status }}">
+                            {{ 'Активен' if call.status == 'active' else 'В работе' if call.status == 'in_progress' else 'Завершен' }}
+                        </span>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('call_detail', id=call.id) }}" class="btn btn-small">Подробнее</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <a href="{{ url_for('calls') }}" class="btn" style="margin-top: 20px;">Все вызовы</a>
+    </div>
+    
+    <div>
+        <div class="card" style="margin-bottom: 20px;">
+            <h2>Активность</h2>
+            <p><strong>Активных пользователей:</strong> {{ active_users }}</p>
+            <p><strong>Непрочитанных уведомлений:</strong> {{ unread_notifications }}</p>
+        </div>
+        
+        <div class="card">
+            <h2>Последние действия</h2>
+            <div style="max-height: 300px; overflow-y: auto;">
+                {% for action in recent_actions %}
+                <div style="padding: 8px; border-bottom: 1px solid #eee;">
+                    <small style="color: #666;">{{ action.timestamp.strftime('%H:%M:%S') }}</small>
+                    <div>
+                        <strong>{{ action.user.nickname if action.user else 'system' }}</strong>
+                        {{ action.action_type }}
+                        {{ action.target_type }}
+                        {% if action.target_nickname %}
+                        <code>{{ action.target_nickname }}</code>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <a href="{{ url_for('history') }}" class="btn" style="margin-top: 20px;">Вся история</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

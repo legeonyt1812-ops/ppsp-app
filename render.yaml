@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: ppsp-app
+    runtime: python
+    region: frankfurt
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -k eventlet -w 1 app:app
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ppsp-db
+          property: connectionString
+
+databases:
+  - name: ppsp-db
+    plan: free
+    databaseName: ppsp
+    user: ppsp_user
+    ipAllowList: []

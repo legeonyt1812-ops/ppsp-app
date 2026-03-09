@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>Оперативные вызовы</h2>
+        <a href="{{ url_for('new_call') }}" class="btn btn-success">➕ Новый вызов</a>
+    </div>
+    
+    <div style="display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap;">
+        <a href="{{ url_for('calls') }}?status=active" 
+           class="btn {% if current_status == 'active' %}btn-danger{% endif %}">
+           🟡 Активные
+        </a>
+        <a href="{{ url_for('calls') }}?status=in_progress" 
+           class="btn {% if current_status == 'in_progress' %}btn-primary{% endif %}">
+           🔵 В работе
+        </a>
+        <a href="{{ url_for('calls') }}?status=completed" 
+           class="btn {% if current_status == 'completed' %}btn-success{% endif %}">
+           🟢 Завершенные
+        </a>
+        <a href="{{ url_for('calls') }}?my_only=true" 
+           class="btn {% if my_only %}btn-info{% endif %}">
+           👤 Мои вызовы
+        </a>
+    </div>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Никнейм</th>
+                <th>КУСП</th>
+                <th>Время</th>
+                <th>Адрес</th>
+                <th>Категория</th>
+                <th>Приоритет</th>
+                <th>Статус</th>
+                <th>Наряд</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for call in calls.items %}
+            <tr>
+                <td><code>{{ call.nickname }}</code></td>
+                <td><strong>{{ call.kusp_number }}</strong></td>
+                <td>{{ call.received_time }}</td>
+                <td>{{ call.address }}</td>
+                <td>
+                    {% if call.category == 'crime' %}🔪 Преступление
+                    {% elif call.category == 'administrative' %}📋 Административное
+                    {% elif call.category == 'accident' %}🚗 ДТП
+                    {% else %}📌 Проверка{% endif %}
+                </td>
+                <td>
+                    <span class="priority-{{ call.priority }}">
+                        {% if call.priority == 'high' %}🔴 Высокий
+                        {% elif call.priority == 'medium' %}🟠 Средний
+                        {% else %}🟢 Низкий{% endif %}
+                    </span>
+                </td>
+                <td>
+                    {% if call.status == 'active' %}
+                    <span class="status-active">🟡 Активен</span>
+                    {% elif call.status == 'in_progress' %}
+                    <span class="status-in-progress">🔵 В работе</span>
+                    {% elif call.status == 'completed' %}
+                    <span class="status-completed">🟢 Завершен</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if call.assignee %}
+                    <span title="{{ call.assignee.full_name }}">{{ call.assignee.nickname }}</span>
+                    {% else %}
+                    <span style="color: #999;">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('call_detail', id=call.id) }}" class="btn btn-small">Подробнее</a>
+                    {% if call.status == 'active' and not call.assigned_to_id %}
+                    <form method="POST" action="{{ url_for('take_call', id=call.id) }}" style="display: inline;">
+                        <button type="submit" class="btn btn-small btn-success">Принять</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            
+            {% if calls.items|length == 0 %}
+            <tr>
+                <td colspan="9" style="text-align: center; padding: 40px;">
+                    Нет вызовов
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+    
+    {% if calls.pages > 1 %}
+    <div style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;">
+        {% if calls.has_prev %}
+        <a href="{{ url_for('calls', page=calls.prev_num, status=current_status, my_only=my_only) }}" class="btn">← Назад</a>
+        {% endif %}
+        
+        <span style="padding: 10px;">Страница {{ calls.page }} из {{ calls.pages }}</span>
+        
+        {% if calls.has_next %}
+        <a href="{{ url_for('calls', page=calls.next_num, status=current_status, my_only=my_only) }}" class="btn">Вперед →</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.btn-primary {
+    background: #007bff;
+}
+.btn-primary:hover {
+    background: #0056b3;
+}
+.btn-info {
+    background: #17a2b8;
+    color: white;
+}
+.btn-info:hover {
+    background: #138496;
+}
+</style>
+{% endblock %}
