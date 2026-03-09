@@ -4,25 +4,28 @@ services:
     runtime: python
     region: frankfurt
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: |
+      apt-get update
+      apt-get install -y python3-dev build-essential libjpeg-dev zlib1g-dev
+      pip install --upgrade pip
+      pip install -r requirements.txt
     startCommand: gunicorn -k eventlet -w 1 app:app
     envVars:
-      - key: SECRET_KEY
-        generateValue: true
-      - key: CLOUDINARY_CLOUD_NAME
-        sync: false
-      - key: CLOUDINARY_API_KEY
-        sync: false
-      - key: CLOUDINARY_API_SECRET
-        sync: false
       - key: DATABASE_URL
         fromDatabase:
           name: ppsp-db
           property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CLOUDINARY_CLOUD_NAME
+        value: ""  # Оставьте пустым, если не используете
+      - key: CLOUDINARY_API_KEY
+        value: ""
+      - key: CLOUDINARY_API_SECRET
+        value: ""
 
 databases:
   - name: ppsp-db
     plan: free
     databaseName: ppsp
     user: ppsp_user
-    ipAllowList: []
