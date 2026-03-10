@@ -24,6 +24,10 @@
            class="btn {% if my_only %}btn-info{% endif %}">
            👤 Мои вызовы
         </a>
+        <a href="{{ url_for('calls') }}?status=all" 
+           class="btn {% if current_status == 'all' %}btn-secondary{% endif %}">
+           📋 Все
+        </a>
     </div>
     
     <table>
@@ -97,6 +101,7 @@
         </tbody>
     </table>
     
+    <!-- Пагинация -->
     {% if calls.pages > 1 %}
     <div style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;">
         {% if calls.has_prev %}
@@ -125,6 +130,14 @@
 }
 .btn-info:hover {
     background: #138496;
+}
+.status-in-progress {
+    background: #007bff;
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    display: inline-block;
 }
 </style>
 {% endblock %}
