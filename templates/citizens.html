@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>База граждан</h2>
+        <a href="{{ url_for('new_citizen') }}" class="btn btn-success">➕ Добавить гражданина</a>
+    </div>
+    
+    <form method="GET" style="margin-bottom: 20px;">
+        <div style="display: flex; gap: 10px;">
+            <input type="text" 
+                   name="search" 
+                   class="search-box" 
+                   placeholder="Поиск по никнейму, ФИО, паспорту, адресу..."
+                   value="{{ search_query }}"
+                   style="flex: 1;">
+            <button type="submit" class="btn">🔍 Найти</button>
+            {% if search_query %}
+            <a href="{{ url_for('citizens') }}" class="btn btn-secondary">✖ Сбросить</a>
+            {% endif %}
+        </div>
+    </form>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Никнейм</th>
+                <th>Фото</th>
+                <th>ФИО</th>
+                <th>Дата рождения</th>
+                <th>Возраст</th>
+                <th>Паспорт</th>
+                <th>Телефон</th>
+                <th>Статус</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for citizen in citizens.items %}
+            <tr>
+                <td><code>{{ citizen.nickname }}</code></td>
+                <td>
+                    {% if citizen.photo_thumb %}
+                    <img src="{{ citizen.photo_thumb }}" alt="photo" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                    {% else %}
+                    <div style="width: 40px; height: 40px; background: #ccc; border-radius: 50%; display: flex; align-items: center; justify-content: center;">📷</div>
+                    {% endif %}
+                </td>
+                <td>
+                    <strong>{{ citizen.last_name }} {{ citizen.first_name }} {{ citizen.middle_name or '' }}</strong>
+                    {% if citizen.wanted %}
+                    <span class="badge badge-danger">В РОЗЫСКЕ</span>
+                    {% endif %}
+                </td>
+                <td>{{ citizen.birth_date or 'не указана' }}</td>
+                <td>{{ citizen.age or '?' }}</td>
+                <td>
+                    {% if citizen.passport_series and citizen.passport_number %}
+                    {{ citizen.passport_series }} {{ citizen.passport_number }}
+                    {% else %}
+                    <span style="color: #999;">нет данных</span>
+                    {% endif %}
+                </td>
+                <td>{{ citizen.phone or '—' }}</td>
+                <td>
+                    {% if citizen.status == 'active' %}
+                    <span class="status-active">Активен</span>
+                    {% elif citizen.status == 'deceased' %}
+                    <span style="background: #000; color: white; padding: 3px 8px; border-radius: 12px;">Умер</span>
+                    {% elif citizen.status == 'emigrated' %}
+                    <span style="background: #ffc107; padding: 3px 8px; border-radius: 12px;">Уехал</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('citizen_detail', id=citizen.id) }}" class="btn btn-small">👁️</a>
+                    <a href="{{ url_for('edit_citizen', id=citizen.id) }}" class="btn btn-small btn-warning">✏️</a>
+                </td>
+            </tr>
+            {% endfor %}
+            
+            {% if citizens.items|length == 0 %}
+            <tr>
+                <td colspan="9" style="text-align: center; padding: 40px;">
+                    {% if search_query %}
+                    <p>Ничего не найдено по запросу "{{ search_query }}"</p>
+                    {% else %}
+                    <p>В базе нет граждан. <a href="{{ url_for('new_citizen') }}">Добавить первого</a></p>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+    
+    <!-- Пагинация -->
+    {% if citizens.pages > 1 %}
+    <div style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;">
+        {% if citizens.has_prev %}
+        <a href="{{ url_for('citizens', page=citizens.prev_num, search=search_query) }}" class="btn">← Назад</a>
+        {% endif %}
+        
+        <span style="padding: 10px;">Страница {{ citizens.page }} из {{ citizens.pages }}</span>
+        
+        {% if citizens.has_next %}
+        <a href="{{ url_for('citizens', page=citizens.next_num, search=search_query) }}" class="btn">Вперед →</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.btn-small {
+    padding: 5px 10px;
+    font-size: 0.9rem;
+}
+.btn-warning {
+    background: #ffc107;
+    color: #000;
+}
+.btn-warning:hover {
+    background: #e0a800;
+}
+.badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    margin-left: 5px;
+}
+.badge-danger {
+    background: #c01f2e;
+    color: white;
+}
+</style>
+{% endblock %}
