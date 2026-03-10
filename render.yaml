@@ -6,7 +6,7 @@ services:
     plan: free
     buildCommand: |
       apt-get update
-      apt-get install -y python3-dev build-essential libjpeg-dev zlib1g-dev
+      apt-get install -y python3-dev build-essential
       pip install --upgrade pip
       pip install -r requirements.txt
     startCommand: gunicorn -k eventlet -w 1 app:app
@@ -18,7 +18,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: CLOUDINARY_CLOUD_NAME
-        value: ""  # Оставьте пустым, если не используете
+        value: ""
       - key: CLOUDINARY_API_KEY
         value: ""
       - key: CLOUDINARY_API_SECRET
