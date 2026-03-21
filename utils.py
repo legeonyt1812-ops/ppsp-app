@@ -16,7 +16,7 @@ def generate_nickname(prefix='obj'):
     return f"{prefix}_{uuid.uuid4().hex[:8]}"
 
 def save_photo(file):
-    """Сохраняет фото без обработки (без Pillow)"""
+    """Сохраняет фото"""
     if file and allowed_file(file.filename):
         try:
             # Создаем безопасное имя файла
@@ -33,7 +33,6 @@ def save_photo(file):
             # Сохраняем файл
             file.save(filepath)
             
-            # Возвращаем URL (оригинал и превью - одно и то же)
             return {
                 'url': f'/static/uploads/{new_filename}',
                 'thumb': f'/static/uploads/{new_filename}'
@@ -118,6 +117,27 @@ def format_status(status):
         'active': ('🟡', 'Активен'),
         'in_progress': ('🔵', 'В работе'),
         'completed': ('🟢', 'Завершен'),
-        'cancelled': ('⚫', 'Отменен')
+        'cancelled': ('⚫', 'Отменен'),
+        'captured': ('✅', 'Задержан')
     }
     return statuses.get(status, ('⚪', status))
+
+def get_statistics():
+    """Собирает статистику для дашборда"""
+    from models import Citizen, Wanted, Call, Vehicle, User
+    
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    stats = {
+        'citizens_total': Citizen.query.count(),
+        'citizens_today': Citizen.query.filter(Citizen.created_at >= today).count(),
+        'wanted_active': Wanted.query.filter_by(status='active').count(),
+        'wanted_captured_today': Wanted.query.filter_by(status='captured').filter(Wanted.capture_date == today).count(),
+        'calls_active': Call.query.filter_by(status='active').count(),
+        'calls_in_progress': Call.query.filter_by(status='in_progress').count(),
+        'calls_today': Call.query.filter(Call.received_date == today).count(),
+        'vehicles_stolen': Vehicle.query.filter_by(is_stolen=True).count(),
+        'users_active': User.query.filter(User.last_login >= today).count()
+    }
+    
+    return stats
