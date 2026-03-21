@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ОР ППСП - Провинциальный район</title>
+    <title>{% block title %}ОР ППСП - Провинциальный район{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
@@ -11,7 +11,7 @@
     <div class="navbar">
         <div class="logo">
             МВД России
-            <span>ОР ППСП Провинциальный район</span>
+            <span>{{ app_name }}</span>
         </div>
         {% if current_user.is_authenticated %}
         <div class="user-info">
@@ -20,25 +20,68 @@
                 <span class="notification-badge" id="notificationCount" style="display: none;">0</span>
             </div>
             <span class="user-nickname"><code>{{ current_user.nickname }}</code></span>
-            <span class="user-name">{{ current_user.rank }} {{ current_user.full_name }}</span>
+            <span class="user-name">{{ current_user.rank }} {{ current_user.full_name_short }}</span>
             <span class="badge">ТН: {{ current_user.badge_number }}</span>
-            <a href="{{ url_for('logout') }}" class="btn btn-danger">Выход</a>
+            <div class="user-menu">
+                <button class="btn btn-small" onclick="toggleUserMenu()">▼</button>
+                <div id="userMenu" class="dropdown-menu" style="display: none;">
+                    <a href="{{ url_for('profile') }}">👤 Профиль</a>
+                    <a href="{{ url_for('history') }}">📋 Мои действия</a>
+                    {% if current_user.role == 'admin' %}
+                    <a href="#">⚙️ Администрирование</a>
+                    {% endif %}
+                    <hr>
+                    <a href="{{ url_for('logout') }}" class="text-danger">🚪 Выход</a>
+                </div>
+            </div>
         </div>
         {% endif %}
     </div>
     
     {% if current_user.is_authenticated %}
     <div class="menu">
-        <a href="{{ url_for('index') }}">🏠 Главная</a>
-        <a href="{{ url_for('citizens') }}">👥 Граждане</a>
-        <a href="{{ url_for('wanted') }}">🚔 Розыск</a>
-        <a href="{{ url_for('calls') }}">📞 Вызовы</a>
-        <a href="{{ url_for('new_call') }}">➕ Новый вызов</a>
-        <a href="{{ url_for('history') }}">📋 История</a>
+        <a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}active{% endif %}">
+            🏠 Главная
+        </a>
+        <a href="{{ url_for('citizens') }}" class="{% if request.endpoint in ['citizens', 'citizen_detail', 'new_citizen', 'edit_citizen'] %}active{% endif %}">
+            👥 Граждане
+        </a>
+        <a href="{{ url_for('wanted') }}" class="{% if request.endpoint in ['wanted', 'wanted_detail'] %}active{% endif %}">
+            🚔 Розыск
+            {% if stats and stats.wanted_active > 0 %}
+            <span class="menu-badge">{{ stats.wanted_active }}</span>
+            {% endif %}
+        </a>
+        <a href="{{ url_for('calls') }}" class="{% if request.endpoint in ['calls', 'call_detail', 'new_call'] %}active{% endif %}">
+            📞 Вызовы
+            {% if stats and stats.calls_active > 0 %}
+            <span class="menu-badge">{{ stats.calls_active }}</span>
+            {% endif %}
+        </a>
+        <a href="{{ url_for('vehicles') }}" class="{% if request.endpoint in ['vehicles', 'vehicle_detail', 'new_vehicle'] %}active{% endif %}">
+            🚗 Транспорт
+        </a>
+        <a href="{{ url_for('history') }}" class="{% if request.endpoint == 'history' %}active{% endif %}">
+            📋 История
+        </a>
+        <a href="{{ url_for('reports') }}" class="{% if request.endpoint == 'reports' %}active{% endif %}">
+            📊 Отчеты
+        </a>
     </div>
     {% endif %}
     
     <div class="container">
+        <!-- Поисковая строка -->
+        {% if current_user.is_authenticated %}
+        <div class="search-bar">
+            <form id="globalSearch" onsubmit="return false;">
+                <input type="text" id="searchInput" placeholder="Быстрый поиск по никнейму, ФИО, номеру..." autocomplete="off">
+                <div id="searchResults" class="search-results" style="display: none;"></div>
+            </form>
+        </div>
+        {% endif %}
+        
+        <!-- Flash сообщения -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -47,14 +90,18 @@
             {% endif %}
         {% endwith %}
         
+        <!-- Панель уведомлений -->
         <div id="notificationsPanel" class="notifications-panel" style="display: none;">
             <div class="notifications-header">
                 <h3>Уведомления</h3>
                 <button onclick="markAllRead()" class="btn btn-small">Все прочитано</button>
             </div>
-            <div id="notificationsList" class="notifications-list"></div>
+            <div id="notificationsList" class="notifications-list">
+                <!-- Загружается через JS -->
+            </div>
         </div>
         
+        <!-- Основной контент -->
         {% block content %}{% endblock %}
     </div>
     
@@ -67,6 +114,7 @@
         name: '{{ current_user.full_name if current_user.is_authenticated else '' }}'
     };
     
+    // Socket.IO события
     socket.on('connect', function() {
         console.log('Connected to server');
     });
@@ -80,10 +128,24 @@
         showNotification('Вызов принят', data.user + ' принял вызов');
     });
     
+    socket.on('call_completed', function(data) {
+        showNotification('Вызов завершен', data.user + ' завершил вызов');
+    });
+    
+    socket.on('wanted_update', function(data) {
+        showNotification('Розыск', 'Новый в розыске: ' + data.name);
+        updateNotificationCount();
+    });
+    
+    socket.on('wanted_captured', function(data) {
+        showNotification('Задержание', 'Задержан: ' + data.name);
+    });
+    
     socket.on('user_status', function(data) {
         console.log('User ' + data.user + ' is ' + data.status);
     });
     
+    // Функции уведомлений
     function showNotification(title, message) {
         var audio = new Audio('/static/sounds/notification.mp3');
         audio.play().catch(e => console.log('Audio play failed'));
@@ -163,11 +225,109 @@
             });
     }
     
+    function toggleUserMenu() {
+        var menu = document.getElementById('userMenu');
+        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    }
+    
+    // Поиск
+    document.getElementById('searchInput')?.addEventListener('input', function(e) {
+        var query = e.target.value;
+        if (query.length < 2) {
+            document.getElementById('searchResults').style.display = 'none';
+            return;
+        }
+        
+        fetch('/api/search?q=' + encodeURIComponent(query))
+            .then(response => response.json())
+            .then(data => {
+                var results = document.getElementById('searchResults');
+                var html = '';
+                
+                if (data.citizens && data.citizens.length > 0) {
+                    html += '<div class="search-category">Граждане:</div>';
+                    data.citizens.forEach(c => {
+                        html += `<a href="/citizen/${c.id}" class="search-item">👤 ${c.full_name} (${c.nickname})</a>`;
+                    });
+                }
+                
+                if (data.calls && data.calls.length > 0) {
+                    html += '<div class="search-category">Вызовы:</div>';
+                    data.calls.forEach(c => {
+                        html += `<a href="/call/${c.id}" class="search-item">📞 ${c.kusp} - ${c.address}</a>`;
+                    });
+                }
+                
+                if (data.vehicles && data.vehicles.length > 0) {
+                    html += '<div class="search-category">Транспорт:</div>';
+                    data.vehicles.forEach(v => {
+                        html += `<a href="/vehicle/${v.id}" class="search-item">🚗 ${v.plate} - ${v.model}</a>`;
+                    });
+                }
+                
+                if (data.wanted && data.wanted.length > 0) {
+                    html += '<div class="search-category">Розыск:</div>';
+                    data.wanted.forEach(w => {
+                        html += `<a href="/wanted/${w.id}" class="search-item">🚔 ${w.name}</a>`;
+                    });
+                }
+                
+                if (html === '') {
+                    html = '<div class="search-item">Ничего не найдено</div>';
+                }
+                
+                results.innerHTML = html;
+                results.style.display = 'block';
+            });
+    });
+    
+    // Закрытие поиска при клике вне
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#globalSearch')) {
+            document.getElementById('searchResults').style.display = 'none';
+        }
+        if (!e.target.closest('.user-menu')) {
+            document.getElementById('userMenu').style.display = 'none';
+        }
+    });
+    
+    // Запрос разрешения на уведомления
     if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         Notification.requestPermission();
     }
     
+    // Обновляем счетчик каждые 30 секунд
     setInterval(updateNotificationCount, 30000);
+    
+    // Загружаем статистику
+    function loadStats() {
+        fetch('/api/stats')
+            .then(response => response.json())
+            .then(data => {
+                // Обновляем бейджи в меню
+                var badges = document.querySelectorAll('.menu-badge');
+                badges.forEach(b => b.remove());
+                
+                if (data.wanted > 0) {
+                    var wantedLink = document.querySelector('a[href="/wanted"]');
+                    var badge = document.createElement('span');
+                    badge.className = 'menu-badge';
+                    badge.textContent = data.wanted;
+                    wantedLink.appendChild(badge);
+                }
+                
+                if (data.calls > 0) {
+                    var callsLink = document.querySelector('a[href="/calls"]');
+                    var badge = document.createElement('span');
+                    badge.className = 'menu-badge';
+                    badge.textContent = data.calls;
+                    callsLink.appendChild(badge);
+                }
+            });
+    }
+    
+    loadStats();
+    setInterval(loadStats, 60000); // Каждую минуту
     </script>
 </body>
 </html>
