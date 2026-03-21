@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <h2>История действий</h2>
+    
+    <form method="GET" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; padding: 20px; background: #f5f5f5; border-radius: 10px;">
+        <div>
+            <label>Пользователь:</label>
+            <select name="user_id" style="width: 100%; padding: 8px;">
+                <option value="">Все</option>
+                {% for user in users %}
+                <option value="{{ user.id }}" {% if filters.user_id == user.id %}selected{% endif %}>
+                    {{ user.nickname }} ({{ user.full_name }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div>
+            <label>Тип действия:</label>
+            <select name="action_type" style="width: 100%; padding: 8px;">
+                <option value="">Все</option>
+                <option value="login" {% if filters.action_type == 'login' %}selected{% endif %}>Вход</option>
+                <option value="logout" {% if filters.action_type == 'logout' %}selected{% endif %}>Выход</option>
+                <option value="create" {% if filters.action_type == 'create' %}selected{% endif %}>Создание</option>
+                <option value="update" {% if filters.action_type == 'update' %}selected{% endif %}>Изменение</option>
+                <option value="delete" {% if filters.action_type == 'delete' %}selected{% endif %}>Удаление</option>
+                <option value="search" {% if filters.action_type == 'search' %}selected{% endif %}>Поиск</option>
+                <option value="view" {% if filters.action_type == 'view' %}selected{% endif %}>Просмотр</option>
+                <option value="take" {% if filters.action_type == 'take' %}selected{% endif %}>Принятие вызова</option>
+                <option value="complete" {% if filters.action_type == 'complete' %}selected{% endif %}>Завершение</option>
+            </select>
+        </div>
+        
+        <div>
+            <label>Объект:</label>
+            <select name="target_type" style="width: 100%; padding: 8px;">
+                <option value="">Все</option>
+                <option value="citizen" {% if filters.target_type == 'citizen' %}selected{% endif %}>Гражданин</option>
+                <option value="call" {% if filters.target_type == 'call' %}selected{% endif %}>Вызов</option>
+                <option value="wanted" {% if filters.target_type == 'wanted' %}selected{% endif %}>Розыск</option>
+                <option value="vehicle" {% if filters.target_type == 'vehicle' %}selected{% endif %}>Транспорт</option>
+                <option value="user" {% if filters.target_type == 'user' %}selected{% endif %}>Пользователь</option>
+            </select>
+        </div>
+        
+        <div>
+            <label>Дата с:</label>
+            <input type="date" name="date_from" value="{{ filters.date_from }}" style="width: 100%; padding: 8px;">
+        </div>
+        
+        <div>
+            <label>Дата по:</label>
+            <input type="date" name="date_to" value="{{ filters.date_to }}" style="width: 100%; padding: 8px;">
+        </div>
+        
+        <div style="display: flex; gap: 10px; align-items: flex-end;">
+            <button type="submit" class="btn">Применить фильтры</button>
+            <a href="{{ url_for('history') }}" class="btn btn-secondary">Сбросить</a>
+        </div>
+    </form>
+    
+    <div style="display: flex; gap: 20px; margin: 20px 0; flex-wrap: wrap;">
+        {% for stat in action_stats %}
+        <div style="background: #f0f0f0; padding: 5px 15px; border-radius: 20px;">
+            <strong>{{ stat[0] }}:</strong> {{ stat[1] }}
+        </div>
+        {% endfor %}
+    </div>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Время</th>
+                <th>Пользователь</th>
+                <th>Никнейм</th>
+                <th>Действие</th>
+                <th>Объект</th>
+                <th>Цель</th>
+                <th>Детали</th>
+                <th>IP</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs.items %}
+            <tr>
+                <td>{{ log.timestamp.strftime('%H:%M:%S') }}<br><small>{{ log.timestamp.strftime('%Y-%m-%d') }}</small></td>
+                <td>
+                    <strong>{{ log.user.nickname if log.user else 'system' }}</strong><br>
+                    <small>{{ log.user.full_name if log.user else 'Система' }}</small>
+                </td>
+                <td><code>{{ log.target_nickname or '-' }}</code></td>
+                <td>
+                    {% if log.action_type == 'login' %}🔓 Вход
+                    {% elif log.action_type == 'logout' %}🔒 Выход
+                    {% elif log.action_type == 'create' %}➕ Создание
+                    {% elif log.action_type == 'update' %}✏️ Изменение
+                    {% elif log.action_type == 'delete' %}🗑️ Удаление
+                    {% elif log.action_type == 'search' %}🔍 Поиск
+                    {% elif log.action_type == 'view' %}👁️ Просмотр
+                    {% elif log.action_type == 'take' %}📞 Принял вызов
+                    {% elif log.action_type == 'complete' %}✅ Завершил
+                    {% else %}{{ log.action_type }}{% endif %}
+                </td>
+                <td>{{ log.target_type }}</td>
+                <td>
+                    {% if log.target_id %}
+                        {% if log.target_type == 'citizen' %}
+                        <a href="{{ url_for('citizen_detail', id=log.target_id) }}">{{ log.target_id }}</a>
+                        {% elif log.target_type == 'call' %}
+                        <a href="{{ url_for('call_detail', id=log.target_id) }}">{{ log.target_id }}</a>
+                        {% else %}
+                        {{ log.target_id }}
+                        {% endif %}
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td>
+                    {% if log.details %}
+                    <pre style="margin: 0; font-size: 0.8rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis;">{{ log.details[:50] }}...</pre>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td><small>{{ log.ip_address or '-' }}</small></td>
+            </tr>
+            {% endfor %}
+            
+            {% if logs.items|length == 0 %}
+            <tr>
+                <td colspan="8" style="text-align: center; padding: 40px;">
+                    Нет записей в истории
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+    
+    <!-- Пагинация -->
+    {% if logs.pages > 1 %}
+    <div style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;">
+        {% if logs.has_prev %}
+        <a href="{{ url_for('history', page=logs.prev_num, user_id=filters.user_id, action_type=filters.action_type, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to) }}" class="btn">← Назад</a>
+        {% endif %}
+        
+        <span style="padding: 10px;">Страница {{ logs.page }} из {{ logs.pages }}</span>
+        
+        {% if logs.has_next %}
+        <a href="{{ url_for('history', page=logs.next_num, user_id=filters.user_id, action_type=filters.action_type, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to) }}" class="btn">Вперед →</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<style>
+pre {
+    background: #f5f5f5;
+    padding: 5px;
+    border-radius: 3px;
+    overflow-x: auto;
+    max-width: 200px;
+}
+</style>
+{% endblock %}
